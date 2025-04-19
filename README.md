@@ -13,11 +13,15 @@ An app for performing image segmentation with PaliGemma 2 mix
 Structure:
 
 ```
-project/
+project_folder/
 ├── app/
-│   ├── segmentation.py
 │   ├── main.py
-│   ├── requirements.txt
-│   ├── Dockerfile
-└── .dockerignore
+│   └── segmentation.py
+├── models/
+│   └── vae-oid.npz
+├── .dockerignore
+├── .gitignore
+├── Dockerfile
+├── README.md
+└── requirements.txt
 ```
