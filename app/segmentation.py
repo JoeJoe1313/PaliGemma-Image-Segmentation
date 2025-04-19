@@ -10,10 +10,13 @@ import mlx.nn as nn
 import numpy as np
 from mlx_vlm import apply_chat_template, generate, load
 from mlx_vlm.utils import load_image
+from tensorflow.io import gfile
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
+
+VAE_MODEL = "gs://big_vision/paligemma/vae-oid.npz"
 
 
 class ResBlock(nn.Module):
@@ -153,11 +156,11 @@ def _quantized_values_from_codebook_indices(
 
 
 @functools.cache
-def get_reconstruct_masks(checkpoint_path: str) -> Callable[[mx.array], mx.array]:
+def get_reconstruct_masks() -> Callable[[mx.array], mx.array]:
     """Loads the checkpoint and returns a function that reconstructs masks
     from codebook indices using a preloaded MLX decoder.
     """
-    with open(checkpoint_path, "rb") as f:
+    with gfile.GFile(VAE_MODEL, "rb") as f:
         checkpoint_data = dict(np.load(f))
 
     params = _get_params(checkpoint_data)
@@ -231,13 +234,12 @@ def gather_masks(output, codes_list, reconstruct_fn):
 
 def segment_image(
     model_path: str,
-    vae_checkpoint: str,
     image_input: str,
     prompt: str,
 ) -> list:
     """Returns a list of dicts: {mask: np.ndarray, coordinates: (x0,y0,x1,y1)}"""
     model, processor = load(model_path)
-    reconstruct_fn = get_reconstruct_masks(vae_checkpoint)
+    reconstruct_fn = get_reconstruct_masks()
 
     primed = apply_chat_template(processor, model.config, prompt + "\n", num_images=1)
     image = (
