@@ -42,4 +42,8 @@ async def segment(
     finally:
         None
 
-    return JSONResponse(content=masks)
+    serialized = []
+    for m in masks:
+        serialized.append({"bbox": m["coordinates"], "mask": m["mask"].tolist()})
+
+    return JSONResponse(content={"results": serialized})
