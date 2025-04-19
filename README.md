@@ -56,8 +56,10 @@ App Architecture:
 graph TD
     subgraph "Docker Container"
         subgraph "app/"
-            main[main.py\nFastAPI Application]
-            segmentation[segmentation.py\nImage Segmentation Logic]
+            main[main.py
+            FastAPI Application]
+            segmentation[segmentation.py
+            Image Segmentation Logic]
             main -->|imports| segmentation
         end
         
@@ -65,7 +67,6 @@ graph TD
             MLX[MLX Library]
             MLX_VLM[mlx_vlm Library]
             TF[TensorFlow]
-            CV2[OpenCV]
         end
         
         subgraph "Models"
@@ -77,7 +78,6 @@ graph TD
         main -->|uses| MLX_VLM
         segmentation -->|uses| MLX
         segmentation -->|uses| TF
-        segmentation -->|uses| CV2
         
         main -->|loads| PaliGemma
         segmentation -->|loads| VAE
@@ -87,18 +87,14 @@ graph TD
     
     subgraph "API Endpoints"
         segment[POST /segment/]
-        health[GET /health]
     end
     
     main -->|defines| segment
-    main -->|defines| health
     Client -->|calls| segment
-    Client -->|calls| health
     
     style Docker fill:#e7f4ff,stroke:#0078d7
     style main fill:#c2e0ff,stroke:#0078d7
     style segmentation fill:#c2e0ff,stroke:#0078d7
     style Client fill:#ffd7b5,stroke:#ff8c00
     style segment fill:#d5e8d4,stroke:#82b366
-    style health fill:#d5e8d4,stroke:#82b366
 ```
