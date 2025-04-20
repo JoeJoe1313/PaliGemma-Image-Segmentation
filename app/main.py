@@ -11,7 +11,7 @@ from .segmentation import segment_image
 app = FastAPI(title="PaliGemma Segmentation API")
 
 # temp while testing
-MODEL_PATH = "mlx-community/paligemma2-10b-mix-448-8bit"
+MODEL_PATH = "google/paligemma2-3b-mix-448"
 
 
 class SegmentRequest(BaseModel):
@@ -22,6 +22,11 @@ class SegmentRequest(BaseModel):
 class MaskResult(BaseModel):
     mask: List[List[float]]
     coordinates: Tuple[int, int, int, int]
+
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the PaliGemma Segmentation API!"}
 
 
 @app.post("/segment", response_model=List[MaskResult])
@@ -46,4 +51,4 @@ async def segment(
     for m in masks:
         serialized.append({"bbox": m["coordinates"], "mask": m["mask"].tolist()})
 
-    return JSONResponse(content={"results": serialized})
+    return JSONResponse(content={"masks": serialized})
