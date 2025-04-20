@@ -1,0 +1,11 @@
+tensorflow
+transformers
+fastapi[standard]
+uvicorn
+pydantic
+jax
+jaxlib
+flax
+torch
+numpy
+accelerate
