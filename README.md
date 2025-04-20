@@ -64,20 +64,23 @@ graph TD
         end
         
         subgraph "External Dependencies"
-            MLX[MLX Library]
-            MLX_VLM[mlx_vlm Library]
+            NP[numpy]
+            TR[transformers]
             TF[TensorFlow]
+            PT[PyTorch]
+            JF[JAX/Flax]
         end
         
         subgraph "Models"
-            PaliGemma[PaliGemma 2 mix Model]
+            PaliGemma[PaliGemma 2 mix]
             VAE[VAE Checkpoint]
         end
         
-        main -->|uses| MLX
-        main -->|uses| MLX_VLM
-        segmentation -->|uses| MLX
+        segmentation -->|uses| TR
         segmentation -->|uses| TF
+        segmentation -->|uses| PT
+        segmentation -->|uses| JF
+        segmentation -->|uses| NP
         
         main -->|loads| PaliGemma
         segmentation -->|loads| VAE
@@ -87,14 +90,18 @@ graph TD
     
     subgraph "API Endpoints"
         segment[POST /segment/]
+        root[GET /]
     end
     
     main -->|defines| segment
+    main -->|defines| root
     Client -->|calls| segment
+    Client -->|calls| root
     
     style Docker fill:#e7f4ff,stroke:#0078d7
     style main fill:#c2e0ff,stroke:#0078d7
     style segmentation fill:#c2e0ff,stroke:#0078d7
     style Client fill:#ffd7b5,stroke:#ff8c00
     style segment fill:#d5e8d4,stroke:#82b366
+    style root fill:#d5e8d4,stroke:#82b366
 ```
