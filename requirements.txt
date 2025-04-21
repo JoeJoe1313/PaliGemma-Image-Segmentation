@@ -9,3 +9,5 @@ flax
 torch
 numpy
 accelerate
+huggingface-hub
+pillow
