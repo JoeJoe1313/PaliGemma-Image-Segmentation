@@ -106,7 +106,29 @@ graph TD
     style root fill:#d5e8d4,stroke:#82b366
 ```
 
-# Example:
+# Examples:
+
+API docs: http://localhost:8000/docs
+
+## Check if the API is running: GET Request
+
+Request:
+
+```bash
+curl -X 'GET' \
+  'http://localhost:8000/' \
+  -H 'accept: application/json'
+```
+
+Response:
+
+```json
+{
+    "message": "Welcome to the PaliGemma Segmentation API!"
+}
+```
+
+## Segmenting an Image: POST Request
 
 Request:
 
