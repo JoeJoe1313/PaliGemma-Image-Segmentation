@@ -20,7 +20,7 @@ class SegmentRequest(BaseModel):
 
 
 class MaskResult(BaseModel):
-    mask: List[List[float]]
+    mask: bytes
     coordinates: Tuple[int, int, int, int]
 
 
@@ -47,8 +47,4 @@ async def segment(
     finally:
         None
 
-    serialized = []
-    for m in masks:
-        serialized.append({"bbox": m["coordinates"], "mask": m["mask"].tolist()})
-
-    return JSONResponse(content={"masks": serialized})
+    return JSONResponse(content={"message": masks})

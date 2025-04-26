@@ -1,15 +1,18 @@
 """Segmentation logic."""
 
+import base64
 import functools
+import io
 import logging
 import re
-from typing import Callable, List, Tuple
+from typing import Any, Callable, Dict, List
 
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import numpy as np
 import torch
+from PIL import Image
 from tensorflow.io import gfile
 from transformers import PaliGemmaForConditionalGeneration, PaliGemmaProcessor
 from transformers.image_utils import load_image
@@ -167,7 +170,9 @@ def parse_bbox(model_output: str):
     return results
 
 
-def gather_masks(output, codes_list, reconstruct_fn):
+def gather_masks(
+    output: str, codes_list: List[List[int]], reconstruct_fn: Callable
+) -> List[Dict[str, Any]]:
     masks_list = []
 
     target_width, target_height = 448, 448
@@ -175,6 +180,11 @@ def gather_masks(output, codes_list, reconstruct_fn):
         codes_batch = codes[None, :]
         masks = reconstruct_fn(codes_batch)
         mask_np = np.array(masks[0, :, :, 0], copy=False)
+        mask_np = np.clip(mask_np * 0.5 + 0.5, 0, 1)
+        mask_np = Image.fromarray((mask_np * 255).astype("uint8"))
+        buffer = io.BytesIO()
+        mask_np.save(buffer, format="PNG")
+        mask_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
         y_min, x_min, y_max, x_max = parse_bbox(output)[i]
         x_min_norm = int(x_min / 1024 * target_width)
@@ -184,7 +194,7 @@ def gather_masks(output, codes_list, reconstruct_fn):
 
         masks_list.append(
             {
-                "mask": mask_np,
+                "mask": mask_base64,
                 "coordinates": (x_min_norm, y_min_norm, x_max_norm, y_max_norm),
             }
         )
