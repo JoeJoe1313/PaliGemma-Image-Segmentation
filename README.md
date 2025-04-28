@@ -2,6 +2,9 @@
 
 An app for performing image segmentation with PaliGemma 2 mix
 
+> [!NOTE]
+> Work in progress.
+
 ---
 
 - transformers, JAX/Flax -> PaliGemma 2 mix
