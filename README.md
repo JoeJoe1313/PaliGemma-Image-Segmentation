@@ -69,7 +69,6 @@ graph TD
         subgraph "External Dependencies"
             NP[numpy]
             TR[transformers]
-            TF[TensorFlow]
             PT[PyTorch]
             JF[JAX/Flax]
         end
@@ -80,7 +79,6 @@ graph TD
         end
         
         segmentation -->|uses| TR
-        segmentation -->|uses| TF
         segmentation -->|uses| PT
         segmentation -->|uses| JF
         segmentation -->|uses| NP

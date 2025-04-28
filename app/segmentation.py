@@ -4,6 +4,7 @@ import base64
 import functools
 import io
 import logging
+import os
 import re
 from typing import Any, Callable, Dict, List
 
@@ -13,7 +14,6 @@ import jax.numpy as jnp
 import numpy as np
 import torch
 from PIL import Image
-from tensorflow.io import gfile
 from transformers import PaliGemmaForConditionalGeneration, PaliGemmaProcessor
 from transformers.image_utils import load_image
 
@@ -21,7 +21,7 @@ logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
-VAE_MODEL = "gs://big_vision/paligemma/vae-oid.npz"
+VAE_MODEL = "models/vae-oid.npz"
 
 
 class ResBlock(nn.Module):
@@ -136,7 +136,8 @@ def get_reconstruct_masks():
         )
         return Decoder().apply({"params": params}, quantized)
 
-    with gfile.GFile(VAE_MODEL, "rb") as f:
+    vae_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), VAE_MODEL)
+    with open(vae_path, "rb") as f:
         params = _get_params(dict(np.load(f)))
 
     return jax.jit(reconstruct_masks, backend="cpu")
