@@ -107,6 +107,21 @@ graph TD
     style root fill:#d5e8d4,stroke:#82b366
 ```
 
+Simple Architecture:
+
+```mermaid
+graph TD
+    Client[Client] -->|HTTP Request with Image URL & Prompt| API[FastAPI Server]
+    API -->|Process Request| Model[PaliGemma 2 Mix Model]
+    Model -->|Generate Segmentation| API
+    API -->|Return JSON with Mask & Coordinates| Client
+    
+    subgraph Docker Container
+    API
+    Model
+    end
+```
+
 # Examples:
 
 API docs: http://localhost:8000/docs
