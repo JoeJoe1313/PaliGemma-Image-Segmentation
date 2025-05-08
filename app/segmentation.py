@@ -1,5 +1,3 @@
-"""Segmentation logic."""
-
 import base64
 import functools
 import io
@@ -17,6 +15,9 @@ from PIL import Image
 from transformers import PaliGemmaForConditionalGeneration, PaliGemmaProcessor
 from transformers.image_utils import load_image
 
+from app.config import get_model_cache_dir
+
+print(os.path.dirname(__file__))
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -209,10 +210,17 @@ def segment_image(
     prompt: str,
 ) -> list:
     """Returns a list of dicts: {mask: np.ndarray, coordinates: (x0,y0,x1,y1)}"""
+    log.info(f"Loading model from: {model_path}")
+    cache_dir = os.path.join(
+        get_model_cache_dir(), f"models--{get_model_path().replace('/', '--')}"
+    )
+
     model = PaliGemmaForConditionalGeneration.from_pretrained(
-        model_path, torch_dtype=torch.bfloat16, device_map="auto"
+        model_path, torch_dtype=torch.bfloat16, device_map="auto", cache_dir=cache_dir
     ).eval()
-    processor = PaliGemmaProcessor.from_pretrained(model_path)
+    processor = PaliGemmaProcessor.from_pretrained(model_path, cache_dir=cache_dir)
+
+    log.info(f"Model loaded successfully. Processing image with prompt: {prompt}")
     image = load_image(image_input)
 
     model_inputs = (

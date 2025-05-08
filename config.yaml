@@ -1,5 +1,5 @@
 model:
-  model_name: google/paligemma2-3b-mix-448
+  model_path: google/paligemma2-3b-mix-448
   cache_dir: /models
 
 api:

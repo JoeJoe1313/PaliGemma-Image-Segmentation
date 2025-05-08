@@ -10,3 +10,5 @@ numpy
 accelerate
 huggingface-hub
 pillow
+python-multipart
+pyyaml

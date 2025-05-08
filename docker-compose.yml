@@ -1,0 +1,14 @@
+services:
+  paligemma-api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - MODEL_PATH=google/paligemma2-3b-mix-448
+      - MODEL_CACHE_DIR=/models
+    volumes:
+      - $HOME/.cache/huggingface/hub:/models
+    restart: unless-stopped

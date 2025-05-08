@@ -3,8 +3,9 @@ from pathlib import Path
 
 import yaml
 
+print(os.path.dirname(__file__))
 DEFAULT_CONFIG = {
-    "model": {"default": "google/paligemma2-3b-mix-448", "cache_dir": "/models"},
+    "model": {"model_path": "google/paligemma2-3b-mix-448", "cache_dir": "/models"},
     "api": {"host": "0.0.0.0", "port": 8000},
 }
 
@@ -12,11 +13,13 @@ DEFAULT_CONFIG = {
 def load_config():
     """Load configuration from file if available, otherwise use defaults."""
     config = DEFAULT_CONFIG.copy()
+    # config = {}
 
     config_paths = [
         "/app/config.yaml",
         "/app/config.yml",
     ]
+    print(os.path.dirname(__file__))
     for path in config_paths:
         if os.path.exists(path):
             try:
@@ -34,6 +37,13 @@ def load_config():
                 break
             except Exception as e:
                 print(f"Error loading config from {path}: {e}")
+    print(config)
+    # # Override with environment variables (highest priority)
+    # if os.environ.get("MODEL_PATH"):
+    #     config["model"]["default"] = os.environ.get("MODEL_PATH")
+
+    # if os.environ.get("MODEL_CACHE_DIR"):
+    #     config["model"]["cache_dir"] = os.environ.get("MODEL_CACHE_DIR")
 
     return config
 
@@ -42,9 +52,9 @@ def load_config():
 CONFIG = load_config()
 
 
-def get_default_model():
+def get_model_path():
     """Get the default model path."""
-    return CONFIG["model"]["model_name"]
+    return CONFIG["model"]["model_path"]
 
 
 def get_model_cache_dir():
@@ -57,7 +67,7 @@ def ensure_dirs_exist():
     Path(get_model_cache_dir()).mkdir(parents=True, exist_ok=True)
 
     # Create a subdirectory for the default model
-    default_model = get_default_model().replace("/", "_")
+    default_model = f"models--{get_model_path().replace('/', '--')}"
     Path(os.path.join(get_model_cache_dir(), default_model)).mkdir(
         parents=True, exist_ok=True
     )
