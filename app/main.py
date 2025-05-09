@@ -1,17 +1,15 @@
+import os
 from typing import List, Tuple
 
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
 
-from .config import ensure_dirs_exist, get_model_path
 from .segmentation import segment_image
-
-ensure_dirs_exist()
 
 app = FastAPI(title="PaliGemma Segmentation API")
 
-MODEL_PATH = get_model_path()
+MODEL_ID = os.getenv("MODEL_ID", "google/paligemma2-3b-mix-448")
 
 
 class SegmentRequest(BaseModel):
@@ -28,7 +26,7 @@ class MaskResult(BaseModel):
 async def root():
     return {
         "message": "Welcome to the PaliGemma Segmentation API!",
-        "default_model": MODEL_PATH,
+        "model": MODEL_ID,
     }
 
 
@@ -37,8 +35,6 @@ async def segment(
     prompt: str = Form(...),
     # image_file: UploadFile = File(None),
     image_url: str = Form(None),
-    model_path: str = Form(None),
-    # vae_checkpoint: str = Form(None),
 ):
     """Segment image based on text prompt.
 
@@ -56,9 +52,8 @@ async def segment(
     # if not (image_file or image_url):
     #     raise HTTPException(400, "Provide either `file` or `url`.")
 
-    model_to_use = model_path or MODEL_PATH
     try:
-        masks = segment_image(model_to_use, image_url, prompt)
+        masks = segment_image(MODEL_ID, image_url, prompt)
     except Exception as e:
         raise HTTPException(500, f"Segmentation failed: {str(e)}")
     finally:

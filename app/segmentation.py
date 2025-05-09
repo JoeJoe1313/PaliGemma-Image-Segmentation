@@ -15,13 +15,13 @@ from PIL import Image
 from transformers import PaliGemmaForConditionalGeneration, PaliGemmaProcessor
 from transformers.image_utils import load_image
 
-from .config import get_model_cache_dir, get_model_path
-
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 VAE_MODEL = "vae-oid.npz"
+MODEL_ID = os.getenv("MODEL_ID", "google/paligemma2-3b-mix-448")
+MODELS_DIR = os.getenv("MODELS_DIR", "/app/models")
 
 
 class ResBlock(nn.Module):
@@ -136,7 +136,7 @@ def get_reconstruct_masks():
         )
         return Decoder().apply({"params": params}, quantized)
 
-    vae_path = os.path.join(os.getenv("MODELS_DIR", "/app/models"), VAE_MODEL)
+    vae_path = os.path.join(MODELS_DIR, VAE_MODEL)
     with open(vae_path, "rb") as f:
         params = _get_params(dict(np.load(f)))
 
@@ -204,20 +204,24 @@ def gather_masks(
 
 
 def segment_image(
-    model_path: str,
+    model_id: str,
     image_input: str,
     prompt: str,
 ) -> list:
     """Returns a list of dicts: {mask: np.ndarray, coordinates: (x0,y0,x1,y1)}"""
-    log.info(f"Loading model from: {model_path}")
-    cache_dir = os.path.join(
-        get_model_cache_dir(), f"models--{get_model_path().replace('/', '--')}"
-    )
 
+    log.info(f"Loading model: {model_id}")
+    model_dir = os.path.join(MODELS_DIR, "huggingface")
     model = PaliGemmaForConditionalGeneration.from_pretrained(
-        model_path, torch_dtype=torch.bfloat16, device_map="auto", cache_dir=cache_dir
+        MODEL_ID,
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+        cache_dir=model_dir,
+        local_files_only=True,
     ).eval()
-    processor = PaliGemmaProcessor.from_pretrained(model_path, cache_dir=cache_dir)
+    processor = PaliGemmaProcessor.from_pretrained(
+        MODEL_ID, cache_dir=model_dir, local_files_only=True
+    )
 
     log.info(f"Model loaded successfully. Processing image with prompt: {prompt}")
     image = load_image(image_input)
