@@ -15,14 +15,13 @@ from PIL import Image
 from transformers import PaliGemmaForConditionalGeneration, PaliGemmaProcessor
 from transformers.image_utils import load_image
 
-from app.config import get_model_cache_dir
+from .config import get_model_cache_dir, get_model_path
 
-print(os.path.dirname(__file__))
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
-VAE_MODEL = "models/vae-oid.npz"
+VAE_MODEL = "vae-oid.npz"
 
 
 class ResBlock(nn.Module):
@@ -137,7 +136,7 @@ def get_reconstruct_masks():
         )
         return Decoder().apply({"params": params}, quantized)
 
-    vae_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), VAE_MODEL)
+    vae_path = os.path.join(os.getenv("MODELS_DIR", "/app/models"), VAE_MODEL)
     with open(vae_path, "rb") as f:
         params = _get_params(dict(np.load(f)))
 

@@ -3,7 +3,6 @@ from pathlib import Path
 
 import yaml
 
-print(os.path.dirname(__file__))
 DEFAULT_CONFIG = {
     "model": {"model_path": "google/paligemma2-3b-mix-448", "cache_dir": "/models"},
     "api": {"host": "0.0.0.0", "port": 8000},
@@ -19,7 +18,6 @@ def load_config():
         "/app/config.yaml",
         "/app/config.yml",
     ]
-    print(os.path.dirname(__file__))
     for path in config_paths:
         if os.path.exists(path):
             try:
@@ -37,7 +35,7 @@ def load_config():
                 break
             except Exception as e:
                 print(f"Error loading config from {path}: {e}")
-    print(config)
+
     # # Override with environment variables (highest priority)
     # if os.environ.get("MODEL_PATH"):
     #     config["model"]["default"] = os.environ.get("MODEL_PATH")
@@ -66,7 +64,6 @@ def ensure_dirs_exist():
     """Ensure all required directories exist."""
     Path(get_model_cache_dir()).mkdir(parents=True, exist_ok=True)
 
-    # Create a subdirectory for the default model
     default_model = f"models--{get_model_path().replace('/', '--')}"
     Path(os.path.join(get_model_cache_dir(), default_model)).mkdir(
         parents=True, exist_ok=True

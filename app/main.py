@@ -1,17 +1,12 @@
-import os
-import sys
 from typing import List, Tuple
 
-from config import ensure_dirs_exist, get_model_path
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
-from segmentation import segment_image
 
-print("Python path:", sys.path)
-print("Current directory:", os.getcwd())
-print("File directory:", os.path.dirname(__file__))
-print(os.path.dirname(__file__))
+from .config import ensure_dirs_exist, get_model_path
+from .segmentation import segment_image
+
 ensure_dirs_exist()
 
 app = FastAPI(title="PaliGemma Segmentation API")
