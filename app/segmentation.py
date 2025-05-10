@@ -205,8 +205,9 @@ def gather_masks(
 
 def segment_image(
     model_id: str,
-    image_input: str,
-    prompt: str,
+    prompt: str = None,
+    image_url: str = None,
+    image_file=None,
 ) -> list:
     """Returns a list of dicts: {mask: np.ndarray, coordinates: (x0,y0,x1,y1)}"""
 
@@ -224,7 +225,15 @@ def segment_image(
     )
 
     log.info(f"Model loaded successfully. Processing image with prompt: {prompt}")
-    image = load_image(image_input)
+
+    if image_file:
+        image_content = image_file.file.read()
+        image = Image.open(io.BytesIO(image_content))
+        image = load_image(image)
+    elif image_url:
+        image = load_image(image_url)
+    else:
+        raise ValueError("No image provided")
 
     model_inputs = (
         processor(text=prompt, images=image, return_tensors="pt")

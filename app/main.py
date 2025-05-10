@@ -1,7 +1,7 @@
 import os
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
-from fastapi import FastAPI, Form, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
 
@@ -33,30 +33,34 @@ async def root():
 @app.post("/segment", response_model=List[MaskResult])
 async def segment(
     prompt: str = Form(...),
-    # image_file: UploadFile = File(None),
-    image_url: str = Form(None),
+    image_url: Optional[str] = Form(default=None),
+    image_file: Optional[UploadFile] = File(default=None),
 ):
     """Segment image based on text prompt.
 
     Args:
-        prompt (str, optional): Text description of objects to segment. Defaults to Form(...).
-        image_url (str, optional): URL of the image to segment. Defaults to Form(None).
-        model_path (str, optional): Optional custom model path. Defaults to Form(None).
+        prompt (str): Text description of objects to segment.
+        image_url (str, optional): URL of the image to segment.
+        image_file (UploadFile, optional): Uploaded image file to segment.
 
     Raises:
-        HTTPException: _description_
+        HTTPException: When no image source is provided, when both image sources are provided, or when segmentation fails.
 
     Returns:
-        _type_: _description_
+        List[MaskResult]: List of segmentation masks with their coordinates.
     """
-    # if not (image_file or image_url):
-    #     raise HTTPException(400, "Provide either `file` or `url`.")
+    if not (image_file or image_url):
+        raise HTTPException(
+            status_code=400, detail="Provide either an image file or image URL."
+        )
+    if image_file and image_url:
+        raise HTTPException(
+            status_code=400, detail="Provide either an image file or image URL, not both."
+        )
 
     try:
-        masks = segment_image(MODEL_ID, image_url, prompt)
+        masks = segment_image(MODEL_ID, prompt, image_url, image_file)
     except Exception as e:
         raise HTTPException(500, f"Segmentation failed: {str(e)}")
-    finally:
-        None
 
     return JSONResponse(content={"message": masks})
