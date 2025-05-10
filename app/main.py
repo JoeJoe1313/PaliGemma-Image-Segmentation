@@ -5,7 +5,7 @@ from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
 
-from .segmentation import segment_image
+from app.segmentation import segment_image
 
 app = FastAPI(title="PaliGemma Segmentation API")
 
