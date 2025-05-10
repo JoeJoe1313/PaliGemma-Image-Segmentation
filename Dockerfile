@@ -2,9 +2,6 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-ARG HF_TOKEN
-ENV HF_TOKEN=${HF_TOKEN}
-
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

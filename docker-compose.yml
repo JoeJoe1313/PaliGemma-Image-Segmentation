@@ -3,15 +3,18 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
-      args:
-        - HF_TOKEN=${HF_TOKEN}
     ports:
       - "8000:8000"
     environment:
-      - HF_TOKEN=${HF_TOKEN}
       - MODEL_ID=google/paligemma2-3b-mix-448
       - MODELS_DIR=/app/models
+    secrets:
+      - hf_token
     volumes:
       - ./models:/app/models
-      - $HOME/.cache/huggingface/hub:/app/models/huggingface
+      - $HOME/.cache/huggingface/hub:/app/models/huggingface:ro
     restart: unless-stopped
+
+secrets:
+  hf_token:
+    file: $HOME/.cache/huggingface/token
