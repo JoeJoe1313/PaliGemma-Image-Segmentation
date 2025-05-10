@@ -21,6 +21,8 @@ log.setLevel(logging.INFO)
 
 VAE_MODEL = "vae-oid.npz"
 MODEL_ID = os.getenv("MODEL_ID", "google/paligemma2-3b-mix-448")
+TARGET_WIDTH = int(os.getenv("TARGET_WIDTH", 448))
+TARGET_HEIGHT = int(os.getenv("TARGET_HEIGHT", 448))
 MODELS_DIR = os.getenv("MODELS_DIR", "/app/models")
 
 
@@ -172,11 +174,26 @@ def parse_bbox(model_output: str):
 
 
 def gather_masks(
-    output: str, codes_list: List[List[int]], reconstruct_fn: Callable
+    output: str,
+    codes_list: List[List[int]],
+    reconstruct_fn: Callable,
+    model_inputs: Dict = None,
+    processor=None,
 ) -> List[Dict[str, Any]]:
+
+    result = {}
     masks_list = []
 
-    target_width, target_height = 448, 448
+    pixel_values = model_inputs["pixel_values"][0].float().cpu()
+    image_mean = torch.tensor(processor.image_processor.image_mean).view(-1, 1, 1)
+    image_std = torch.tensor(processor.image_processor.image_std).view(-1, 1, 1)
+    image = pixel_values * image_std + image_mean
+    image = image.permute(1, 2, 0).numpy()
+    input_image = Image.fromarray((image * 255).clip(0, 255).astype("uint8"))
+    buffer = io.BytesIO()
+    input_image.save(buffer, format="PNG")
+    result["image"] = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
     for i, codes in enumerate(codes_list):
         codes_batch = codes[None, :]
         masks = reconstruct_fn(codes_batch)
@@ -188,10 +205,10 @@ def gather_masks(
         mask_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
         y_min, x_min, y_max, x_max = parse_bbox(output)[i]
-        x_min_norm = int(x_min / 1024 * target_width)
-        y_min_norm = int(y_min / 1024 * target_height)
-        x_max_norm = int(x_max / 1024 * target_width)
-        y_max_norm = int(y_max / 1024 * target_height)
+        x_min_norm = int(x_min / 1024 * TARGET_WIDTH)
+        y_min_norm = int(y_min / 1024 * TARGET_HEIGHT)
+        x_max_norm = int(x_max / 1024 * TARGET_WIDTH)
+        y_max_norm = int(y_max / 1024 * TARGET_HEIGHT)
 
         masks_list.append(
             {
@@ -200,7 +217,9 @@ def gather_masks(
             }
         )
 
-    return masks_list
+    result["masks"] = masks_list
+
+    return result
 
 
 def segment_image(
@@ -208,8 +227,13 @@ def segment_image(
     prompt: str = None,
     image_url: str = None,
     image_file=None,
-) -> list:
-    """Returns a list of dicts: {mask: np.ndarray, coordinates: (x0,y0,x1,y1)}"""
+) -> dict:
+    """Returns a dict:
+    {
+        image: base64_image,
+        masks: [{mask: base64_mask, coordinates: (x0,y0,x1,y1)}, ...]
+    }
+    """
 
     log.info(f"Loading model: {model_id}")
     model_dir = os.path.join(MODELS_DIR, "huggingface")
@@ -250,4 +274,4 @@ def segment_image(
     codes = extract_and_create_arrays(decoded)
     reconstruct_fn = get_reconstruct_masks()
 
-    return gather_masks(decoded, codes, reconstruct_fn)
+    return gather_masks(decoded, codes, reconstruct_fn, model_inputs, processor)

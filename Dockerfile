@@ -7,8 +7,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-ENV MODEL_ID="google/paligemma2-3b-mix-448"
-ENV MODELS_DIR="/app/models"
+ENV MODEL_ID=google/paligemma2-3b-mix-448
+ENV MODELS_DIR=/app/models
+ENV TARGET_WIDTH=448
+ENV TARGET_HEIGHT=448
 
 EXPOSE 8000
 

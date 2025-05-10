@@ -59,4 +59,4 @@ async def segment(
     except Exception as e:
         raise HTTPException(500, f"Segmentation failed: {str(e)}")
 
-    return JSONResponse(content={"message": masks})
+    return JSONResponse(content=masks)

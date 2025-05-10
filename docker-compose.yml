@@ -8,6 +8,8 @@ services:
     environment:
       - MODEL_ID=google/paligemma2-3b-mix-448
       - MODELS_DIR=/app/models
+      - TARGET_WIDTH=448
+      - TARGET_HEIGHT=448
     secrets:
       - hf_token
     volumes:
