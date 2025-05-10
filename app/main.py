@@ -1,5 +1,5 @@
 import os
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -10,11 +10,6 @@ from app.segmentation import segment_image
 app = FastAPI(title="PaliGemma Segmentation API")
 
 MODEL_ID = os.getenv("MODEL_ID", "google/paligemma2-3b-mix-448")
-
-
-class SegmentRequest(BaseModel):
-    prompt: str
-    image_url: HttpUrl = None
 
 
 class MaskResult(BaseModel):
@@ -55,7 +50,8 @@ async def segment(
         )
     if image_file and image_url:
         raise HTTPException(
-            status_code=400, detail="Provide either an image file or image URL, not both."
+            status_code=400,
+            detail="Provide either an image file or image URL, not both.",
         )
 
     try:
