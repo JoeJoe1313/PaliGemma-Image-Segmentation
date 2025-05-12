@@ -1,10 +1,16 @@
+import logging
 import os
 from typing import List, Optional, Tuple
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.segmentation import segment_image
+
+logging.basicConfig()
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 app = FastAPI(title="PaliGemma Segmentation API")
 
@@ -12,8 +18,40 @@ MODEL_ID = os.getenv("MODEL_ID", "google/paligemma2-3b-mix-448")
 
 
 class MaskResult(BaseModel):
-    mask: bytes
+    """Model for segmentation mask result."""
+
+    mask: str  # base64 encoded mask image
     coordinates: Tuple[int, int, int, int]
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "mask": "base64_encoded_mask_data",
+                "coordinates": [62, 254, 140, 348],
+            }
+        }
+    }
+
+
+class SegmentationResponse(BaseModel):
+    """API response model for segmentation results."""
+
+    image: str
+    masks: List[MaskResult]
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "image": "base64_encoded_image_data",
+                "masks": [
+                    {
+                        "mask": "base64_encoded_mask_data",
+                        "coordinates": [62, 254, 140, 348],
+                    }
+                ],
+            }
+        }
+    }
 
 
 @app.get("/")
@@ -23,7 +61,7 @@ async def root():
     }
 
 
-@app.post("/segment", response_model=List[MaskResult])
+@app.post("/segment", response_model=SegmentationResponse)
 async def segment(
     prompt: str = Form(...),
     image_url: Optional[str] = Form(default=None),
@@ -42,22 +80,36 @@ async def segment(
         HTTPException: When no image source is provided, when both image sources are provided, or when segmentation fails.
 
     Returns:
-        List[MaskResult]: List of segmentation masks with their coordinates.
+        SegmentationResponse: List of segmentation masks with their coordinates.
     """
     if not (image_file or image_url):
-        raise HTTPException(
-            status_code=400, detail="Provide either an image file or image URL."
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "error",
+                "detail": "Provide either an image file or image URL.",
+            },
         )
     if image_file and image_url:
-        raise HTTPException(
+        return JSONResponse(
             status_code=400,
-            detail="Provide either an image file or image URL, not both.",
+            content={
+                "status": "error",
+                "detail": "Provide either an image file or image URL, not both.",
+            },
         )
 
     used_model_id = model_id or MODEL_ID
     try:
-        masks = segment_image(used_model_id, prompt, image_url, image_file)
+        result = segment_image(used_model_id, prompt, image_url, image_file)
+        masks = [
+            MaskResult(mask=mask["mask"], coordinates=mask["coordinates"])
+            for mask in result["masks"]
+        ]
+        return SegmentationResponse(image=result["image"], masks=masks)
     except Exception as e:
-        raise HTTPException(500, f"Segmentation failed: {str(e)}")
-
-    return masks
+        log.error(f"Segmentation failed: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "detail": f"Segmentation failed: {str(e)}"},
+        )

@@ -4,7 +4,8 @@ import io
 import logging
 import os
 import re
-from typing import Any, Callable, Dict, List
+from dataclasses import dataclass
+from typing import Any, BinaryIO, Callable, Dict, List, Optional, Tuple, TypedDict
 
 import flax.linen as nn
 import jax
@@ -12,7 +13,12 @@ import jax.numpy as jnp
 import numpy as np
 import torch
 from PIL import Image
-from transformers import PaliGemmaForConditionalGeneration, PaliGemmaProcessor
+from transformers import (
+    PaliGemmaForConditionalGeneration,
+    PaliGemmaProcessor,
+    PreTrainedModel,
+    PreTrainedTokenizer,
+)
 from transformers.image_utils import load_image
 
 logging.basicConfig()
@@ -23,11 +29,41 @@ VAE_MODEL = "vae-oid.npz"
 MODELS_DIR = os.getenv("MODELS_DIR", "/app/models")
 
 
+class MaskData(TypedDict):
+    mask: str  # base64 encoded mask image
+    coordinates: Tuple[int, int, int, int]  # (x0, y0, x1, y1)
+
+
+class SegmentationResult(TypedDict):
+    image: str  # base64 encoded input image
+    masks: List[MaskData]
+
+
+class ModelInputs(TypedDict):
+    pixel_values: torch.Tensor
+    input_ids: torch.Tensor
+
+
+@dataclass
+class ImageProcessor:
+    """Processor for image normalization."""
+
+    image_mean: List[float]
+    image_std: List[float]
+
+
+@dataclass
+class Processor:
+    """Wrapper for image processor."""
+
+    image_processor: ImageProcessor
+
+
 class ResBlock(nn.Module):
     features: int
 
     @nn.compact
-    def __call__(self, x):
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
         original_x = x
         x = nn.Conv(features=self.features, kernel_size=(3, 3), padding=1)(x)
         x = nn.relu(x)
@@ -42,7 +78,7 @@ class Decoder(nn.Module):
     """Upscales quantized vectors to mask."""
 
     @nn.compact
-    def __call__(self, x):
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
         num_res_blocks = 2
         dim = 128
         num_upsample_layers = 4
@@ -69,7 +105,7 @@ class Decoder(nn.Module):
         return x
 
 
-def _get_params(checkpoint):
+def _get_params(checkpoint: Dict[str, np.ndarray]) -> Dict[str, Any]:
     """Converts PyTorch checkpoint to Flax params."""
 
     def transp(kernel):
@@ -101,7 +137,9 @@ def _get_params(checkpoint):
     }
 
 
-def _quantized_values_from_codebook_indices(codebook_indices, embeddings):
+def _quantized_values_from_codebook_indices(
+    codebook_indices: jnp.ndarray, embeddings: jnp.ndarray
+) -> jnp.ndarray:
     batch_size, num_tokens = codebook_indices.shape
     assert num_tokens == 16, codebook_indices.shape
     _, embedding_dim = embeddings.shape
@@ -112,7 +150,7 @@ def _quantized_values_from_codebook_indices(codebook_indices, embeddings):
 
 
 @functools.cache
-def get_reconstruct_masks():
+def get_reconstruct_masks() -> Callable[[np.ndarray], np.ndarray]:
     """Reconstructs masks from codebook indices.
 
     Based on code from https://arxiv.org/abs/2301.02229
@@ -142,7 +180,7 @@ def get_reconstruct_masks():
     return jax.jit(reconstruct_masks, backend="cpu")
 
 
-def extract_and_create_arrays(pattern: str):
+def extract_and_create_arrays(pattern: str) -> List[np.ndarray]:
     """Extracts segmentation tokens from each object in the pattern and returns a list of MLX arrays."""
     object_strings = [obj.strip() for obj in pattern.split(";") if obj.strip()]
 
@@ -156,7 +194,7 @@ def extract_and_create_arrays(pattern: str):
     return seg_tokens_arrays
 
 
-def parse_bbox(model_output: str):
+def parse_bbox(model_output: str) -> List[List[int]]:
     entries = model_output.split(";")
 
     results = []
@@ -172,12 +210,12 @@ def parse_bbox(model_output: str):
 
 def gather_masks(
     output: str,
-    codes_list: List[List[int]],
-    reconstruct_fn: Callable,
-    model_inputs: Dict = None,
-    processor=None,
-    target_size: int = None,
-) -> List[Dict[str, Any]]:
+    codes_list: List[np.ndarray],
+    reconstruct_fn: Callable[[np.ndarray], np.ndarray],
+    model_inputs: ModelInputs,
+    processor: Processor,
+    target_size: int,
+) -> SegmentationResult:
 
     result = {}
     masks_list = []
@@ -232,12 +270,71 @@ def extract_image_size_from_model_id(model_id: str) -> int:
         ) from e
 
 
+def load_hf_token() -> str:
+    """Load Hugging Face token from Docker secrets."""
+    secret_path = "/run/secrets/hf_token"
+    try:
+        with open(secret_path, "r") as f:
+            token = f.read().strip()
+            if token:
+                return token
+            log.warning("Empty HF_TOKEN found in secrets.")
+            return ""
+    except FileNotFoundError:
+        log.warning(
+            "HF_TOKEN not found in secrets. Access to gated models may be limited."
+        )
+        return ""
+
+
+def load_model_and_processor(
+    model_id: str, model_dir: str, hf_token: str
+) -> Tuple[PreTrainedModel, PreTrainedTokenizer]:
+    """Load model and processor with fallback to remote download."""
+
+    def _load_from_pretrained(
+        local_only: bool = False,
+    ) -> Tuple[PreTrainedModel, PreTrainedTokenizer]:
+        kwargs = {
+            "cache_dir": model_dir,
+            "local_files_only": local_only,
+        }
+        if not local_only and hf_token:
+            kwargs["token"] = hf_token
+
+        model = PaliGemmaForConditionalGeneration.from_pretrained(
+            model_id, torch_dtype=torch.bfloat16, device_map="auto", **kwargs
+        ).eval()
+        processor = PaliGemmaProcessor.from_pretrained(model_id, **kwargs)
+
+        return model, processor
+
+    try:
+        return _load_from_pretrained(local_only=True)
+    except Exception as local_error:
+        log.info(f"Model {model_id} not found locally, attempting to download...")
+        try:
+            return _load_from_pretrained(local_only=False)
+        except Exception as download_error:
+            if not hf_token:
+                raise ValueError(
+                    f"Failed to load model {model_id}. This model requires authentication. "
+                    f"Please configure a valid Hugging Face token in Docker secrets. "
+                    f"Error: {str(download_error)}"
+                ) from download_error
+            raise ValueError(
+                f"Failed to load model {model_id} even with authentication. "
+                f"Please verify model access permissions. "
+                f"Error: {str(download_error)}"
+            ) from download_error
+
+
 def segment_image(
     model_id: str,
-    prompt: str = None,
-    image_url: str = None,
-    image_file=None,
-) -> dict:
+    prompt: Optional[str] = None,
+    image_url: Optional[str] = None,
+    image_file: Optional[BinaryIO] = None,
+) -> SegmentationResult:
     """Returns a dict:
     {
         image: base64_image,
@@ -247,56 +344,11 @@ def segment_image(
 
     log.info(f"Loading model: {model_id}")
 
-    hf_token = None
-    secret_path = "/run/secrets/hf_token"
-    if os.path.exists(secret_path):
-        with open(secret_path, "r") as f:
-            hf_token = f.read().strip()
-
-    if not hf_token:
-        log.warning(
-            "HF_TOKEN not found in secrets. You may not be able to access gated models."
-        )
-
+    hf_token = load_hf_token()
     target_size = extract_image_size_from_model_id(model_id)
     model_dir = os.path.join(MODELS_DIR, "huggingface")
-    try:
-        model = PaliGemmaForConditionalGeneration.from_pretrained(
-            model_id,
-            torch_dtype=torch.bfloat16,
-            device_map="auto",
-            cache_dir=model_dir,
-            local_files_only=True,
-        ).eval()
-        processor = PaliGemmaProcessor.from_pretrained(
-            model_id, cache_dir=model_dir, local_files_only=True
-        )
-    except Exception as local_error:
-        try:
-            log.info(f"Model {model_id} not found locally, attempting to download...")
-            model = PaliGemmaForConditionalGeneration.from_pretrained(
-                model_id,
-                torch_dtype=torch.bfloat16,
-                device_map="auto",
-                cache_dir=model_dir,
-                token=hf_token,
-            ).eval()
-            processor = PaliGemmaProcessor.from_pretrained(
-                model_id, cache_dir=model_dir, token=hf_token
-            )
-        except Exception as download_error:
-            if not hf_token:
-                raise ValueError(
-                    f"Failed to load model {model_id}. This model requires authentication. "
-                    f"Please make sure the Hugging Face token is correctly configured in Docker secrets. "
-                    f"Error: {str(download_error)}"
-                )
-            else:
-                raise ValueError(
-                    f"Failed to load model {model_id} even with authentication. "
-                    f"Please check if you have access to this model. "
-                    f"Error: {str(download_error)}"
-                )
+
+    model, processor = load_model_and_processor(model_id, model_dir, hf_token)
 
     log.info(f"Model loaded successfully. Processing image with prompt: {prompt}")
 
