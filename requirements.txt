@@ -5,7 +5,7 @@ pydantic==2.11.4
 jax==0.6.0
 jaxlib==0.6.0
 flax==0.10.6
-torch==2.7.0+cpu
+torch==2.7.0 --index-url https://download.pytorch.org/whl/cpu
 numpy==2.2.5
 accelerate==1.6.0
 pillow==11.2.1
