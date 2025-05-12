@@ -1,8 +1,6 @@
 services:
   paligemma-api:
-    build: 
-      context: .
-      dockerfile: Dockerfile
+    image: joejoe1313/paligemma-image-segmentation:latest
     ports:
       - "8000:8000"
     environment:
