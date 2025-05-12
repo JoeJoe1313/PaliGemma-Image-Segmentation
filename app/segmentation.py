@@ -20,9 +20,6 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 VAE_MODEL = "vae-oid.npz"
-MODEL_ID = os.getenv("MODEL_ID", "google/paligemma2-3b-mix-448")
-TARGET_WIDTH = int(os.getenv("TARGET_WIDTH", 448))
-TARGET_HEIGHT = int(os.getenv("TARGET_HEIGHT", 448))
 MODELS_DIR = os.getenv("MODELS_DIR", "/app/models")
 
 
@@ -179,6 +176,7 @@ def gather_masks(
     reconstruct_fn: Callable,
     model_inputs: Dict = None,
     processor=None,
+    target_size: int = None,
 ) -> List[Dict[str, Any]]:
 
     result = {}
@@ -205,10 +203,10 @@ def gather_masks(
         mask_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
         y_min, x_min, y_max, x_max = parse_bbox(output)[i]
-        x_min_norm = int(x_min / 1024 * TARGET_WIDTH)
-        y_min_norm = int(y_min / 1024 * TARGET_HEIGHT)
-        x_max_norm = int(x_max / 1024 * TARGET_WIDTH)
-        y_max_norm = int(y_max / 1024 * TARGET_HEIGHT)
+        x_min_norm = int(x_min / 1024 * target_size)
+        y_min_norm = int(y_min / 1024 * target_size)
+        x_max_norm = int(x_max / 1024 * target_size)
+        y_max_norm = int(y_max / 1024 * target_size)
 
         masks_list.append(
             {
@@ -220,6 +218,18 @@ def gather_masks(
     result["masks"] = masks_list
 
     return result
+
+
+def extract_image_size_from_model_id(model_id: str) -> int:
+    """Extract image size from model ID (e.g., 448 from 'google/paligemma2-3b-mix-448')"""
+    try:
+        size_str = model_id.split("-")[-1]
+        return int(size_str)
+    except (ValueError, IndexError) as e:
+        log.error(f"Could not extract image size from model ID: {model_id}")
+        raise ValueError(
+            f"Invalid model ID format. Expected size suffix (e.g., -448): {model_id}"
+        ) from e
 
 
 def segment_image(
@@ -236,17 +246,57 @@ def segment_image(
     """
 
     log.info(f"Loading model: {model_id}")
+
+    hf_token = None
+    secret_path = "/run/secrets/hf_token"
+    if os.path.exists(secret_path):
+        with open(secret_path, "r") as f:
+            hf_token = f.read().strip()
+
+    if not hf_token:
+        log.warning(
+            "HF_TOKEN not found in secrets. You may not be able to access gated models."
+        )
+
+    target_size = extract_image_size_from_model_id(model_id)
     model_dir = os.path.join(MODELS_DIR, "huggingface")
-    model = PaliGemmaForConditionalGeneration.from_pretrained(
-        MODEL_ID,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-        cache_dir=model_dir,
-        local_files_only=True,
-    ).eval()
-    processor = PaliGemmaProcessor.from_pretrained(
-        MODEL_ID, cache_dir=model_dir, local_files_only=True
-    )
+    try:
+        model = PaliGemmaForConditionalGeneration.from_pretrained(
+            model_id,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            cache_dir=model_dir,
+            local_files_only=True,
+        ).eval()
+        processor = PaliGemmaProcessor.from_pretrained(
+            model_id, cache_dir=model_dir, local_files_only=True
+        )
+    except Exception as local_error:
+        try:
+            log.info(f"Model {model_id} not found locally, attempting to download...")
+            model = PaliGemmaForConditionalGeneration.from_pretrained(
+                model_id,
+                torch_dtype=torch.bfloat16,
+                device_map="auto",
+                cache_dir=model_dir,
+                token=hf_token,
+            ).eval()
+            processor = PaliGemmaProcessor.from_pretrained(
+                model_id, cache_dir=model_dir, token=hf_token
+            )
+        except Exception as download_error:
+            if not hf_token:
+                raise ValueError(
+                    f"Failed to load model {model_id}. This model requires authentication. "
+                    f"Please make sure the Hugging Face token is correctly configured in Docker secrets. "
+                    f"Error: {str(download_error)}"
+                )
+            else:
+                raise ValueError(
+                    f"Failed to load model {model_id} even with authentication. "
+                    f"Please check if you have access to this model. "
+                    f"Error: {str(download_error)}"
+                )
 
     log.info(f"Model loaded successfully. Processing image with prompt: {prompt}")
 
@@ -274,4 +324,6 @@ def segment_image(
     codes = extract_and_create_arrays(decoded)
     reconstruct_fn = get_reconstruct_masks()
 
-    return gather_masks(decoded, codes, reconstruct_fn, model_inputs, processor)
+    return gather_masks(
+        decoded, codes, reconstruct_fn, model_inputs, processor, target_size
+    )

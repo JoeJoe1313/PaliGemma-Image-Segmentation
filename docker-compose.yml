@@ -8,13 +8,11 @@ services:
     environment:
       - MODEL_ID=google/paligemma2-3b-mix-448
       - MODELS_DIR=/app/models
-      - TARGET_WIDTH=448
-      - TARGET_HEIGHT=448
     secrets:
       - hf_token
     volumes:
       - ./models:/app/models
-      - $HOME/.cache/huggingface/hub:/app/models/huggingface:ro
+      - $HOME/.cache/huggingface/hub:/app/models/huggingface
     restart: unless-stopped
 
 secrets:

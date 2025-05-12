@@ -2,8 +2,7 @@ import os
 from typing import List, Optional, Tuple
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
 from app.segmentation import segment_image
 
@@ -21,7 +20,6 @@ class MaskResult(BaseModel):
 async def root():
     return {
         "message": "Welcome to the PaliGemma Segmentation API!",
-        "model": MODEL_ID,
     }
 
 
@@ -30,6 +28,7 @@ async def segment(
     prompt: str = Form(...),
     image_url: Optional[str] = Form(default=None),
     image_file: Optional[UploadFile] = File(default=None),
+    model_id: Optional[str] = Form(default=None),
 ):
     """Segment image based on text prompt.
 
@@ -37,6 +36,7 @@ async def segment(
         prompt (str): Text description of objects to segment.
         image_url (str, optional): URL of the image to segment.
         image_file (UploadFile, optional): Uploaded image file to segment.
+        model_id (str, optional): Model ID to use for segmentation. Defaults to the configured MODEL_ID.
 
     Raises:
         HTTPException: When no image source is provided, when both image sources are provided, or when segmentation fails.
@@ -54,9 +54,10 @@ async def segment(
             detail="Provide either an image file or image URL, not both.",
         )
 
+    used_model_id = model_id or MODEL_ID
     try:
-        masks = segment_image(MODEL_ID, prompt, image_url, image_file)
+        masks = segment_image(used_model_id, prompt, image_url, image_file)
     except Exception as e:
         raise HTTPException(500, f"Segmentation failed: {str(e)}")
 
-    return JSONResponse(content=masks)
+    return masks
