@@ -9,7 +9,6 @@ services:
     secrets:
       - hf_token
     volumes:
-      - ./models:/app/models
       - $HOME/.cache/huggingface/hub:/app/models/huggingface
     restart: unless-stopped
 
