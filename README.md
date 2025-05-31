@@ -26,40 +26,26 @@ The application uses:
 
 ## Architecture Overview
 
-### Workflow Overview:
+### User & Developer Workflow:
 
 ```mermaid
 graph LR
-    User([User]) -->|Uploads Image| Client[Client Application]
-    User -->|Provides Prompt| Client
+    User([User]) -->|Provides Image & Prompt| ClientApp[Client Application]
+    ClientApp -->|POST Request| FastAPI_Service[FastAPI Service]
+    FastAPI_Service -->|Process Input| PaliGemma_Model[PaliGemma Model]
+    PaliGemma_Model -->|Generate Segmentation Tokens| VAE_Model[VAE Model]
+    VAE_Model -->|Decode Masks| FastAPI_Service
+    FastAPI_Service -->|JSON Response | ClientApp
+    ClientApp -->|Display Results| User
     
-    Client -->|HTTP POST Request| API[FastAPI Service]
-    API -->|Process Image| PaliGemma[PaliGemma Model]
-    PaliGemma -->|Generate Segmentation| VAE[VAE Model]
-    VAE -->|Create Masks| API
-    
-    API -->|JSON Response| Client
-    Client -->|Display Results| User
-    
-    Developer([Developer]) -->|Push Code| GitHub[GitHub Repository]
-    GitHub -->|Trigger| Actions[GitHub Actions]
-    Actions -->|Build & Push| DockerHub[Docker Hub]
-    DockerHub -->|Pull Image| Deployment[Deployment]
-    Deployment -.->|Run| API
-    
-    style User fill:#f9d5e5,stroke:#d64161,stroke-width:2px
-    style Developer fill:#f9d5e5,stroke:#d64161,stroke-width:2px
-    style Client fill:#eeeeee,stroke:#333333
-    style API fill:#b5e7a0,stroke:#86af49
-    style PaliGemma fill:#b8e0d2,stroke:#6a9c89
-    style VAE fill:#d0e1f9,stroke:#7fa6bc
-    style GitHub fill:#f0e4ff,stroke:#9370db
-    style Actions fill:#ffd8b1,stroke:#ff9800
-    style DockerHub fill:#d1ecf1,stroke:#0c5460
-    style Deployment fill:#ffecb3,stroke:#d1b000
+    Developer([Developer]) -->|Push Code| GitHubRepo[GitHub Repository]
+    GitHubRepo -->|Trigger| GitHubActions[GitHub Actions]
+    GitHubActions -->|Build & Push Image| DockerRegistry[Docker Hub]
+    DockerRegistry -->|Pull Image| DeploymentEnv[Deployment Environment]
+    DeploymentEnv -.->|Runs| FastAPI_Service
 ```
 
-### App Architecture:
+### Application Architecture:
 
 ```mermaid
 graph TD
@@ -100,29 +86,39 @@ graph TD
         root[GET /]
     end
     
-    subgraph "CI/CD Pipeline"
-        GitHub[GitHub Repository]
-        Actions[GitHub Actions]
-        Registry[Container Registry]
-        GitHub -->|trigger| Actions
-        Actions -->|build & push| Registry
-        Registry -->|provides image for| Docker
-    end
-    
     main -->|defines| segment
     main -->|defines| root
     Client -->|calls| segment
     Client -->|calls| root
     
-    style Docker fill:#e7f4ff,stroke:#0078d7
     style main fill:#c2e0ff,stroke:#0078d7
     style segmentation fill:#c2e0ff,stroke:#0078d7
     style Client fill:#ffd7b5,stroke:#ff8c00
     style segment fill:#d5e8d4,stroke:#82b366
     style root fill:#d5e8d4,stroke:#82b366
-    style GitHub fill:#f0e4ff,stroke:#9370db
-    style Actions fill:#ffd8b1,stroke:#ff9800
-    style Registry fill:#d1ecf1,stroke:#0c5460
+```
+
+#### Segmentation Process
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Client
+    participant FastAPI
+    participant SegmentationPy as segmentation.py
+    participant PaliGemma as PaliGemma Model
+    participant VAE as VAE Model
+    
+    User->>+Client: Upload image & prompt
+    Client->>+FastAPI: POST /segment
+    FastAPI->>+SegmentationPy: call segment_image()
+    SegmentationPy->>+PaliGemma: infer with PaliGemma
+    PaliGemma-->>-SegmentationPy: (tokens/features)
+    SegmentationPy->>+VAE: generate masks
+    VAE-->>-SegmentationPy: (pixel masks)
+    SegmentationPy-->>-FastAPI: return mask & coords
+    FastAPI-->>-Client: JSON response
+    Client-->>-User: display results
 ```
 
 ## Project Structure
@@ -204,11 +200,14 @@ sequenceDiagram
     participant G as GitHub Repo
     participant A as GitHub Actions
     participant D as Docker Registry
-
-    G->>A: on: push / pull_request
+    
+    G->>A: on: push / pull_request to main
     activate A
-    A-->>A: build Docker image
-    A-->>D: push image
+    A-->>A: Login to Docker Registry
+    A-->>A: Set up QEMU (for multi-arch)
+    A-->>A: Set up Docker Buildx
+    A-->>A: Build Docker image (multi-arch)
+    A-->>D: Push image (tagged with SHA & latest)
     deactivate A
 ```
 
@@ -265,9 +264,11 @@ Form parameters:
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant S as /segment
-    C->>S: POST { image_url: URL, prompt: "object" }
-    S-->>C: { image: Base64, masks: [mask: Base64, coordinates: List[int] }
+    participant S as /segment Endpoint
+    C->>S: POST Request with JSON body: { "image_url": "your_image_url.jpg", "prompt": "object to segment" }
+    S-->>S: Download Image
+    S-->>S: Process with PaliGemma & VAE
+    S-->>C: JSON Response: { "image": "base64_input_image", "masks": [ { "mask": "base64_mask_data", "coordinates": [x_min,y_min,x_max,y_max] } ] }
 ```
 
 **Python requests:**
@@ -352,7 +353,7 @@ flowchart TD
     class B decision1
     class C decision2
     class G,H cache
-
+    
     C -->|Yes| D[Authenticate with HF]
     C -->|No| E[Try Loading Public Model]
     D --> F[Download Model]
