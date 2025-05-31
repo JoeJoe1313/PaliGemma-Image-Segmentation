@@ -217,6 +217,7 @@ To use the CI/CD pipeline:
 - Set up the necessary secrets in your GitHub repository settings:
    - `DOCKERHUB_USERNAME`: Your Docker Hub username
    - `DOCKERHUB_TOKEN`: Your Docker Hub access token
+   - You should also update the image in `docker-compose.yaml` with your username: `{DOCKERHUB_USERNAME}/paligemma-image-segmentation:latest`
 - Push changes to trigger the workflow
 
 ## Examples
