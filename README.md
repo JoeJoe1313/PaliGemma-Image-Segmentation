@@ -2,6 +2,8 @@
 
 An API service for performing image segmentation based on text prompts using Google's **PaliGemma 2 mix** model, built with FastAPI, JAX/Flax, and Transformers. Designed for easy deployment via Docker and Docker Compose.
 
+> Medium post can be found [here](https://medium.com/@levchevajoana/image-segmentation-with-paligemma-2-mix-transformers-docker-fastapi-and-github-actions-ff6d00253832).
+
 ## Overview
 
 This project provides a FastAPI service that leverages PaliGemma 2 mix to perform image segmentation based on text prompts. The service accepts an image (via URL or file upload) and a text prompt describing what to segment, then returns the segmentation masks and bounding box coordinates. The exact PaliGemma 2 model can also be specified.
